@@ -9,12 +9,30 @@ laraigo-api is a NestJS-based API for user management.
 - **URL:** http://localhost:3000/users
 - **Body (JSON):**
   {
-    "name": "Juan"
+    "name": "Juan",
+    "email": "juan@example.com"
   }
 
 ### Get All Users
 - **Method:** GET
 - **URL:** http://localhost:3000/users
+
+### Get User by ID
+- **Method:** GET
+- **URL:** http://localhost:3000/users/:id
+
+### Update User
+- **Method:** PUT
+- **URL:** http://localhost:3000/users/:id
+- **Body (JSON):**
+  {
+    "name": "Updated Name",
+    "email": "newemail@example.com"
+  }
+
+### Delete User
+- **Method:** DELETE
+- **URL:** http://localhost:3000/users/:id
 
 ## Setup & Run
 1. Install dependencies:
@@ -26,8 +44,31 @@ laraigo-api is a NestJS-based API for user management.
 - Uses SQLite (file: db.sqlite)
 
 ## Features
-- Create and fetch users
+- Full CRUD operations for users with optional email field
+- Comprehensive input validation with class-validator
+- Required and optional parameter validation
+- Custom error classes with proper HTTP status codes
+- Global error handling and exception filtering
+- Granular Pino structured logging with request context
+- Rate limiting and throttling protection
+- Database error handling with Prisma
+- Detailed validation error responses
+- Forbidden field detection and error reporting
+- IP tracking and audit logging
 - Testable with Postman
+
+## Validation Rules
+- **Name:** Required, 2-50 characters, string type
+- **Email:** Optional, valid email format when provided
+- **Extra Fields:** Forbidden - returns error if present
+
+## Rate Limits
+- Create User: 10 requests per minute
+- Get All Users: 50 requests per minute  
+- Get User by ID: 30 requests per minute
+- Update User: 5 requests per minute
+- Delete User: 3 requests per minute
+- Global limit: 100 requests per minute
 
 ## Clean Code
 - No comments or unused code
@@ -38,3 +79,7 @@ laraigo-api is a NestJS-based API for user management.
 - Add authentication
 
 ---
+
+npm run start
+npm run start:dev
+http://localhost:3000/

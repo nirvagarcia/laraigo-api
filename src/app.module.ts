@@ -1,17 +1,23 @@
 import { Module } from '@nestjs/common';
-import { TypeOrmModule } from '@nestjs/typeorm';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { APP_GUARD } from '@nestjs/core';
 import { UserModule } from './users/user.module';
-import { User } from './users/user.entity';
+import { LoggerService } from './logger.service';
 
 @Module({
-  imports: [
-    TypeOrmModule.forRoot({
-      type: 'sqlite',
-      database: 'db.sqlite',
-      entities: [User],
-      synchronize: true,
-    }),
-    UserModule,
-  ],
+	imports: [
+		ThrottlerModule.forRoot([{
+			ttl: 60000,
+			limit: 100,
+		}]),
+		UserModule,
+	],
+	providers: [
+		LoggerService,
+		{
+			provide: APP_GUARD,
+			useClass: ThrottlerGuard,
+		},
+	],
 })
 export class AppModule {}
