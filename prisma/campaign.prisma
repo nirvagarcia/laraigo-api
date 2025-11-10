@@ -1,0 +1,36 @@
+generator campaignClient {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma-campaign"
+}
+
+datasource campaignDb {
+  provider = "sqlite"
+  url      = env("DATABASE_URL_CAMPAIGNS")
+}
+
+model Campaign {
+  id             Int       @id @default(autoincrement())
+  title          String
+  description    String?
+  startDate      DateTime
+  endDate        DateTime?
+  source         String
+  executionType  String
+  scheduledDate  DateTime?
+  scheduledTime  String?
+  group          String
+  channel        String
+  messageType    String
+  template       String
+  persons        Json?
+  filePath       String?
+  status         String?   @default("draft")
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([status])
+  @@index([startDate])
+  @@index([source])
+  @@index([channel])
+  @@map("campaigns")
+}

@@ -33,7 +33,6 @@ export class AuthService {
 
     const passwordHash = await bcrypt.hash(dto.password, 10);
     
-    // Assign ADMIN role to specific email, USER role to everyone else
     const role: Role = dto.email === this.ADMIN_EMAIL ? Role.ADMIN : Role.USER;
 
     const user = await this.prisma.user.create({
@@ -117,7 +116,6 @@ export class AuthService {
       throw new UnauthorizedException('User not found');
     }
 
-    // Remove old refresh token
     await Promise.all([
       this.redisService.del(`refresh:${payload.jti}`),
       this.redisService.srem(`user:${user.id}:sessions`, payload.jti),
@@ -179,7 +177,6 @@ export class AuthService {
     const accessTtl = 15 * 60; // 15 minutes
     const refreshTtl = 7 * 24 * 60 * 60; // 7 days
 
-    // Store tokens in Redis with TTL
     await Promise.all([
       this.redisService.set(`access:${accessJti}`, userId.toString(), accessTtl),
       this.redisService.set(`refresh:${refreshJti}`, userId.toString(), refreshTtl),
