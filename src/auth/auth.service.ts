@@ -1,5 +1,6 @@
-import { Injectable, UnauthorizedException, ConflictException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, ConflictException, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { Role } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { RegisterDto } from './dto/register.dto';
@@ -11,12 +12,16 @@ import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+  private readonly ADMIN_EMAIL = 'nirvana.garcia@laraigo.com';
+
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService,
     private redisService: RedisService,
   ) {}
 
+  /** Register new user and issue JWT tokens */
   async register(dto: RegisterDto) {
     const existingUser = await this.prisma.user.findUnique({
       where: { email: dto.email },
@@ -27,12 +32,16 @@ export class AuthService {
     }
 
     const passwordHash = await bcrypt.hash(dto.password, 10);
+    
+    // Assign ADMIN role to specific email, USER role to everyone else
+    const role: Role = dto.email === this.ADMIN_EMAIL ? Role.ADMIN : Role.USER;
 
     const user = await this.prisma.user.create({
       data: {
         name: dto.name,
         email: dto.email,
         passwordHash,
+        role,
       },
       select: {
         id: true,
@@ -44,13 +53,12 @@ export class AuthService {
     });
 
     const tokens = await this.generateTokenPair(user.id, user.role);
+    this.logger.log(`User registered: ${user.email} with role: ${user.role}`);
 
-    return {
-      user,
-      ...tokens,
-    };
+    return { user, ...tokens };
   }
 
+  /** Authenticate user and issue JWT tokens */
   async login(dto: LoginDto) {
     const user = await this.prisma.user.findUnique({
       where: { email: dto.email },
@@ -69,6 +77,7 @@ export class AuthService {
     }
 
     const tokens = await this.generateTokenPair(user.id, user.role);
+    this.logger.log(`User logged in: ${user.email}`);
 
     return {
       user: {
@@ -82,6 +91,7 @@ export class AuthService {
     };
   }
 
+  /** Refresh access token using valid refresh token */
   async refresh(dto: RefreshDto): Promise<TokenPair> {
     let payload: JwtPayload;
     
@@ -107,8 +117,11 @@ export class AuthService {
       throw new UnauthorizedException('User not found');
     }
 
-    await this.redisService.del(`refresh:${payload.jti}`);
-    await this.redisService.srem(`user:${user.id}:sessions`, payload.jti);
+    // Remove old refresh token
+    await Promise.all([
+      this.redisService.del(`refresh:${payload.jti}`),
+      this.redisService.srem(`user:${user.id}:sessions`, payload.jti),
+    ]);
 
     return this.generateTokenPair(user.id, user.role);
   }
@@ -117,15 +130,16 @@ export class AuthService {
     return this.refresh({ refreshToken });
   }
 
+  /** Revoke access token and remove from Redis session store */
   async logout(user: UserSession): Promise<void> {
-    console.log('🔍 [AuthService] Logout for user:', user.userId, 'jti:', user.jti);
     await Promise.all([
       this.redisService.del(`access:${user.jti}`),
       this.redisService.srem(`user:${user.userId}:sessions`, user.jti),
     ]);
-    console.log('✅ [AuthService] Logout successful - token revoked');
+    this.logger.log(`Token revoked for user: ${user.userId}`);
   }
 
+  /** Revoke all user sessions */
   async logoutAll(user: UserSession): Promise<void> {
     const sessions = await this.redisService.smembers(`user:${user.userId}:sessions`);
     
@@ -137,13 +151,13 @@ export class AuthService {
     deletePromises.push(this.redisService.del(`user:${user.userId}:sessions`));
 
     await Promise.all(deletePromises);
+    this.logger.log(`All sessions revoked for user: ${user.userId}`);
   }
 
-  private async generateTokenPair(userId: number, role: string): Promise<TokenPair> {
+  /** Generate JWT token pair and store in Redis */
+  private async generateTokenPair(userId: number, role: Role): Promise<TokenPair> {
     const accessJti = uuidv4();
     const refreshJti = uuidv4();
-
-    console.log('🔍 [AuthService] Generating tokens for user:', userId, 'with JTIs:', { accessJti, refreshJti });
 
     const accessToken = this.jwtService.sign({
       sub: userId,
@@ -162,19 +176,16 @@ export class AuthService {
       expiresIn: '7d',
     });
 
-    const accessTtl = 15 * 60;
-    const refreshTtl = 7 * 24 * 60 * 60;
+    const accessTtl = 15 * 60; // 15 minutes
+    const refreshTtl = 7 * 24 * 60 * 60; // 7 days
 
-    console.log('🔍 [AuthService] Storing tokens in Redis with TTL:', { accessTtl, refreshTtl });
-
+    // Store tokens in Redis with TTL
     await Promise.all([
       this.redisService.set(`access:${accessJti}`, userId.toString(), accessTtl),
       this.redisService.set(`refresh:${refreshJti}`, userId.toString(), refreshTtl),
       this.redisService.sadd(`user:${userId}:sessions`, accessJti),
       this.redisService.sadd(`user:${userId}:sessions`, refreshJti),
     ]);
-
-    console.log('✅ [AuthService] Token pair generated and stored successfully');
 
     return {
       accessToken,

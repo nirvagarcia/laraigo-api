@@ -83,3 +83,5 @@ laraigo-api is a NestJS-based API for user management.
 npm run start
 npm run start:dev
 http://localhost:3000/
+npx prisma studio
+

@@ -61,21 +61,21 @@ export class RedisService implements OnModuleDestroy {
     }
   }
 
+  /** Store key-value with optional TTL */
   async set(key: string, value: string, ttl?: number): Promise<void> {
     if (!this.isConnected) return;
     try {
-      console.log('🔍 [RedisService] Setting key:', key, 'value:', value, 'ttl:', ttl);
       if (ttl) {
         await this.client.setex(key, ttl, value);
       } else {
         await this.client.set(key, value);
       }
-      console.log('✅ [RedisService] Successfully set key:', key);
     } catch (error) {
       this.logger.warn(`Redis SET error: ${error.message}`);
     }
   }
 
+  /** Delete key from Redis */
   async del(key: string): Promise<void> {
     if (!this.isConnected) return;
     try {
@@ -85,6 +85,7 @@ export class RedisService implements OnModuleDestroy {
     }
   }
 
+  /** Add value to Redis set */
   async sadd(key: string, value: string): Promise<void> {
     if (!this.isConnected) return;
     try {
@@ -94,6 +95,7 @@ export class RedisService implements OnModuleDestroy {
     }
   }
 
+  /** Get all members of Redis set */
   async smembers(key: string): Promise<string[]> {
     if (!this.isConnected) return [];
     try {
@@ -104,6 +106,7 @@ export class RedisService implements OnModuleDestroy {
     }
   }
 
+  /** Remove value from Redis set */
   async srem(key: string, value: string): Promise<void> {
     if (!this.isConnected) return;
     try {
@@ -113,14 +116,12 @@ export class RedisService implements OnModuleDestroy {
     }
   }
 
+  /** Check if key exists in Redis */
   async exists(key: string): Promise<boolean> {
     if (!this.isConnected) return false;
     try {
-      console.log('🔍 [RedisService] Checking if key exists:', key);
       const result = await this.client.exists(key);
-      const exists = result === 1;
-      console.log('🔍 [RedisService] Key exists result:', exists);
-      return exists;
+      return result === 1;
     } catch (error) {
       this.logger.warn(`Redis EXISTS error: ${error.message}`);
       return false;

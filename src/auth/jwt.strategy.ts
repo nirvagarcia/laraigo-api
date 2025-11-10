@@ -14,25 +14,18 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     });
   }
 
+  /** Validates JWT payload and verifies token exists in Redis allowlist */
   async validate(payload: JwtPayload): Promise<UserSession> {
-    console.log('🔍 [JwtStrategy] Decoded JWT payload:', payload);
-    console.log('🔍 [JwtStrategy] Checking Redis for token:', `access:${payload.jti}`);
-    
     const tokenExists = await this.redisService.exists(`access:${payload.jti}`);
-    console.log('🔍 [JwtStrategy] Redis token exists:', tokenExists);
     
     if (!tokenExists) {
-      console.log('❌ [JwtStrategy] Token not found in Redis - throwing UnauthorizedException');
-      throw new UnauthorizedException();
+      throw new UnauthorizedException('Token not found in session store');
     }
 
-    const userSession = {
+    return {
       userId: payload.sub,
       role: payload.role,
       jti: payload.jti,
     };
-    
-    console.log('✅ [JwtStrategy] Auth successful for user:', userSession.userId);
-    return userSession;
   }
 }

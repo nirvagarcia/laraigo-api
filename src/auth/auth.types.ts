@@ -1,6 +1,8 @@
+import { Role } from '@prisma/client';
+
 export interface JwtPayload {
   sub: number;
-  role: string;
+  role: Role;
   jti: string;
   iat?: number;
   exp?: number;
@@ -14,6 +16,6 @@ export interface TokenPair {
 
 export interface UserSession {
   userId: number;
-  role: string;
+  role: Role;
   jti: string;
 }
