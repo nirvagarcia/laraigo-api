@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException, ConflictException, Logger } from '@nestjs/common';
+import { Injectable, UnauthorizedException, ConflictException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { Role } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -9,13 +9,15 @@ import { RefreshDto } from './dto/refresh.dto';
 import { TokenPair, JwtPayload, UserSession } from './auth.types';
 import { v4 as uuidv4 } from 'uuid';
 import * as bcrypt from 'bcrypt';
+import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
 
 @Injectable()
 export class AuthService {
-  private readonly logger = new Logger(AuthService.name);
   private readonly ADMIN_EMAIL = 'nirvana.garcia@laraigo.com';
 
   constructor(
+    @InjectPinoLogger(AuthService.name)
+    private readonly logger: PinoLogger,
     private prisma: PrismaService,
     private jwtService: JwtService,
     private redisService: RedisService,
@@ -52,7 +54,14 @@ export class AuthService {
     });
 
     const tokens = await this.generateTokenPair(user.id, user.role);
-    this.logger.log(`User registered: ${user.email} with role: ${user.role}`);
+    this.logger.info(
+      { 
+        userId: user.id, 
+        email: user.email, 
+        role: user.role 
+      }, 
+      'User registered successfully'
+    );
 
     return { user, ...tokens };
   }
@@ -76,7 +85,14 @@ export class AuthService {
     }
 
     const tokens = await this.generateTokenPair(user.id, user.role);
-    this.logger.log(`User logged in: ${user.email}`);
+    this.logger.info(
+      { 
+        userId: user.id, 
+        email: user.email, 
+        role: user.role 
+      }, 
+      'User logged in successfully'
+    );
 
     return {
       user: {
@@ -134,7 +150,13 @@ export class AuthService {
       this.redisService.del(`access:${user.jti}`),
       this.redisService.srem(`user:${user.userId}:sessions`, user.jti),
     ]);
-    this.logger.log(`Token revoked for user: ${user.userId}`);
+    this.logger.info(
+      { 
+        userId: user.userId, 
+        jti: user.jti 
+      }, 
+      'User token revoked'
+    );
   }
 
   /** Revoke all user sessions */
@@ -149,7 +171,13 @@ export class AuthService {
     deletePromises.push(this.redisService.del(`user:${user.userId}:sessions`));
 
     await Promise.all(deletePromises);
-    this.logger.log(`All sessions revoked for user: ${user.userId}`);
+    this.logger.info(
+      { 
+        userId: user.userId, 
+        sessionCount: sessions.length 
+      }, 
+      'All user sessions revoked'
+    );
   }
 
   /** Generate JWT token pair and store in Redis */

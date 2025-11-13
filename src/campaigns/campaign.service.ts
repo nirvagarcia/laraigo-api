@@ -2,13 +2,23 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { CampaignPrismaService } from './prisma/campaign-prisma.service';
 import { CreateCampaignDto } from './dto/create-campaign.dto';
 import { UpdateCampaignDto } from './dto/update-campaign.dto';
+import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
 import { Prisma } from '.prisma-campaign';
 
 @Injectable()
 export class CampaignService {
-  constructor(private campaignPrisma: CampaignPrismaService) {}
+  constructor(
+    @InjectPinoLogger(CampaignService.name)
+    private readonly logger: PinoLogger,
+    private campaignPrisma: CampaignPrismaService,
+  ) {}
 
   async create(createCampaignDto: CreateCampaignDto) {
+    this.logger.info(
+      { event: 'CAMPAIGN_CREATE', module: 'CampaignService', metadata: { title: createCampaignDto.title, channel: createCampaignDto.channel } },
+      'Creating new campaign'
+    );
+    
     const data: any = {
       title: createCampaignDto.title,
       description: createCampaignDto.description || null,
@@ -40,35 +50,74 @@ export class CampaignService {
     }
 
     const campaign = await this.campaignPrisma.campaign.create({ data });
+    
+    this.logger.info(
+      { event: 'CAMPAIGN_CREATE_SUCCESS', module: 'CampaignService', campaignId: campaign.id },
+      'Campaign created successfully'
+    );
+    
     return campaign;
   }
 
   async findAll() {
+    this.logger.info(
+      { event: 'CAMPAIGN_FIND_ALL', module: 'CampaignService' },
+      'Fetching all campaigns'
+    );
+    
     const campaigns = await this.campaignPrisma.campaign.findMany({
       orderBy: { createdAt: 'desc' },
     });
+    
+    this.logger.info(
+      { event: 'CAMPAIGN_FIND_ALL_SUCCESS', module: 'CampaignService', count: campaigns.length },
+      'Successfully fetched campaigns'
+    );
 
     return campaigns;
   }
 
   async findOne(id: number) {
+    this.logger.info(
+      { event: 'CAMPAIGN_FIND_ONE', module: 'CampaignService', campaignId: id },
+      'Fetching campaign by ID'
+    );
+    
     const campaign = await this.campaignPrisma.campaign.findUnique({
       where: { id },
     });
 
     if (!campaign) {
+      this.logger.warn(
+        { event: 'CAMPAIGN_NOT_FOUND', module: 'CampaignService', campaignId: id },
+        'Campaign not found'
+      );
       throw new NotFoundException(`Campaign with ID ${id} not found`);
     }
+    
+    this.logger.info(
+      { event: 'CAMPAIGN_FIND_ONE_SUCCESS', module: 'CampaignService', campaignId: id },
+      'Successfully fetched campaign'
+    );
 
     return campaign;
   }
 
   async update(id: number, updateCampaignDto: UpdateCampaignDto) {
+    this.logger.info(
+      { event: 'CAMPAIGN_UPDATE', module: 'CampaignService', campaignId: id },
+      'Updating campaign'
+    );
+    
     const existingCampaign = await this.campaignPrisma.campaign.findUnique({
       where: { id },
     });
 
     if (!existingCampaign) {
+      this.logger.warn(
+        { event: 'CAMPAIGN_NOT_FOUND', module: 'CampaignService', campaignId: id },
+        'Campaign not found for update'
+      );
       throw new NotFoundException(`Campaign with ID ${id} not found`);
     }
 
@@ -100,22 +149,41 @@ export class CampaignService {
       where: { id },
       data: updateData,
     });
+    
+    this.logger.info(
+      { event: 'CAMPAIGN_UPDATE_SUCCESS', module: 'CampaignService', campaignId: id },
+      'Campaign updated successfully'
+    );
 
     return campaign;
   }
 
   async remove(id: number) {
+    this.logger.info(
+      { event: 'CAMPAIGN_DELETE', module: 'CampaignService', campaignId: id },
+      'Attempting to delete campaign'
+    );
+    
     const existingCampaign = await this.campaignPrisma.campaign.findUnique({
       where: { id },
     });
 
     if (!existingCampaign) {
+      this.logger.warn(
+        { event: 'CAMPAIGN_NOT_FOUND', module: 'CampaignService', campaignId: id },
+        'Campaign not found for deletion'
+      );
       throw new NotFoundException(`Campaign with ID ${id} not found`);
     }
 
     await this.campaignPrisma.campaign.delete({
       where: { id },
     });
+    
+    this.logger.info(
+      { event: 'CAMPAIGN_DELETE_SUCCESS', module: 'CampaignService', campaignId: id },
+      'Campaign deleted successfully'
+    );
 
     return { message: 'Campaign deleted successfully' };
   }

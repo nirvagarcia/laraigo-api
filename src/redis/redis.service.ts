@@ -1,14 +1,18 @@
-import { Injectable, OnModuleDestroy, Logger } from '@nestjs/common';
+import { Injectable, OnModuleDestroy } from '@nestjs/common';
 import Redis from 'ioredis';
+import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
 
 @Injectable()
 export class RedisService implements OnModuleDestroy {
   private client: Redis;
   private isConnected = false;
   private hasAttemptedConnection = false;
-  private readonly logger = new Logger(RedisService.name);
 
-  constructor() {
+  constructor(
+    @InjectPinoLogger(RedisService.name)
+    private readonly logger: PinoLogger,
+  ) {
+
     this.client = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
       lazyConnect: true,
       maxRetriesPerRequest: 1,
@@ -23,19 +27,29 @@ export class RedisService implements OnModuleDestroy {
   private setupEventHandlers() {
     this.client.on('connect', () => {
       this.isConnected = true;
-      this.logger.log('Redis connected successfully');
+      this.logger.info(
+        { event: 'REDIS_CONNECT', module: 'RedisService' },
+        'Redis connected successfully'
+      );
     });
 
     this.client.on('error', (error) => {
       this.isConnected = false;
       if (!this.hasAttemptedConnection) {
-        this.logger.warn('Redis unavailable - session caching disabled');
+        this.logger.warn(
+          { event: 'REDIS_ERROR', module: 'RedisService', error: error.message },
+          'Redis unavailable - session caching disabled'
+        );
         this.hasAttemptedConnection = true;
       }
     });
 
     this.client.on('close', () => {
       this.isConnected = false;
+      this.logger.info(
+        { event: 'REDIS_DISCONNECT', module: 'RedisService' },
+        'Redis connection closed'
+      );
     });
   }
 
@@ -47,23 +61,45 @@ export class RedisService implements OnModuleDestroy {
       this.hasAttemptedConnection = true;
     } catch (error) {
       this.hasAttemptedConnection = true;
-      this.logger.warn('Redis unavailable - session caching disabled');
+      this.logger.warn(
+        { event: 'REDIS_CONNECTION_FAILED', module: 'RedisService', error: error.message },
+        'Redis unavailable - session caching disabled'
+      );
     }
   }
 
   async get(key: string): Promise<string | null> {
     if (!this.isConnected) return null;
+    
+    if (process.env.LOG_REDIS === 'true') {
+      this.logger.debug(
+        { event: 'REDIS_COMMAND', module: 'RedisService', operation: 'GET', key },
+        'Executing Redis GET command'
+      );
+    }
+    
     try {
-      return await this.client.get(key);
+      const result = await this.client.get(key);
+      return result;
     } catch (error) {
-      this.logger.warn(`Redis GET error: ${error.message}`);
+      this.logger.warn(
+        { event: 'REDIS_COMMAND_ERROR', module: 'RedisService', operation: 'GET', key, error: error.message },
+        'Redis GET operation failed'
+      );
       return null;
     }
   }
 
-  /** Store key-value with optional TTL */
   async set(key: string, value: string, ttl?: number): Promise<void> {
     if (!this.isConnected) return;
+    
+    if (process.env.LOG_REDIS === 'true') {
+      this.logger.debug(
+        { event: 'REDIS_COMMAND', module: 'RedisService', operation: 'SET', key, ttl },
+        'Executing Redis SET command'
+      );
+    }
+    
     try {
       if (ttl) {
         await this.client.setex(key, ttl, value);
@@ -71,59 +107,113 @@ export class RedisService implements OnModuleDestroy {
         await this.client.set(key, value);
       }
     } catch (error) {
-      this.logger.warn(`Redis SET error: ${error.message}`);
+      this.logger.warn(
+        { event: 'REDIS_COMMAND_ERROR', module: 'RedisService', operation: 'SET', key, ttl, error: error.message },
+        'Redis SET operation failed'
+      );
     }
   }
 
-  /** Delete key from Redis */
   async del(key: string): Promise<void> {
     if (!this.isConnected) return;
+    
+    if (process.env.LOG_REDIS === 'true') {
+      this.logger.debug(
+        { event: 'REDIS_COMMAND', module: 'RedisService', operation: 'DEL', key },
+        'Executing Redis DEL command'
+      );
+    }
+    
     try {
       await this.client.del(key);
     } catch (error) {
-      this.logger.warn(`Redis DEL error: ${error.message}`);
+      this.logger.warn(
+        { event: 'REDIS_COMMAND_ERROR', module: 'RedisService', operation: 'DEL', key, error: error.message },
+        'Redis DEL operation failed'
+      );
     }
   }
 
-  /** Add value to Redis set */
   async sadd(key: string, value: string): Promise<void> {
     if (!this.isConnected) return;
+    
+    if (process.env.LOG_REDIS === 'true') {
+      this.logger.debug(
+        { event: 'REDIS_COMMAND', module: 'RedisService', operation: 'SADD', key },
+        'Executing Redis SADD command'
+      );
+    }
+    
     try {
       await this.client.sadd(key, value);
     } catch (error) {
-      this.logger.warn(`Redis SADD error: ${error.message}`);
+      this.logger.warn(
+        { event: 'REDIS_COMMAND_ERROR', module: 'RedisService', operation: 'SADD', key, error: error.message },
+        'Redis SADD operation failed'
+      );
     }
   }
 
-  /** Get all members of Redis set */
   async smembers(key: string): Promise<string[]> {
     if (!this.isConnected) return [];
+    
+    if (process.env.LOG_REDIS === 'true') {
+      this.logger.debug(
+        { event: 'REDIS_COMMAND', module: 'RedisService', operation: 'SMEMBERS', key },
+        'Executing Redis SMEMBERS command'
+      );
+    }
+    
     try {
-      return await this.client.smembers(key);
+      const result = await this.client.smembers(key);
+      return result;
     } catch (error) {
-      this.logger.warn(`Redis SMEMBERS error: ${error.message}`);
+      this.logger.warn(
+        { event: 'REDIS_COMMAND_ERROR', module: 'RedisService', operation: 'SMEMBERS', key, error: error.message },
+        'Redis SMEMBERS operation failed'
+      );
       return [];
     }
   }
 
-  /** Remove value from Redis set */
   async srem(key: string, value: string): Promise<void> {
     if (!this.isConnected) return;
+    
+    if (process.env.LOG_REDIS === 'true') {
+      this.logger.debug(
+        { event: 'REDIS_COMMAND', module: 'RedisService', operation: 'SREM', key },
+        'Executing Redis SREM command'
+      );
+    }
+    
     try {
       await this.client.srem(key, value);
     } catch (error) {
-      this.logger.warn(`Redis SREM error: ${error.message}`);
+      this.logger.warn(
+        { event: 'REDIS_COMMAND_ERROR', module: 'RedisService', operation: 'SREM', key, error: error.message },
+        'Redis SREM operation failed'
+      );
     }
   }
 
-  /** Check if key exists in Redis */
   async exists(key: string): Promise<boolean> {
     if (!this.isConnected) return false;
+    
+    if (process.env.LOG_REDIS === 'true') {
+      this.logger.debug(
+        { event: 'REDIS_COMMAND', module: 'RedisService', operation: 'EXISTS', key },
+        'Executing Redis EXISTS command'
+      );
+    }
+    
     try {
       const result = await this.client.exists(key);
       return result === 1;
     } catch (error) {
-      this.logger.warn(`Redis EXISTS error: ${error.message}`);
+      this.logger.warn(
+        { event: 'REDIS_COMMAND_ERROR', module: 'RedisService', operation: 'EXISTS', key, error: error.message },
+        'Redis EXISTS operation failed'
+      );
       return false;
     }
   }

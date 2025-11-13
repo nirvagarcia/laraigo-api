@@ -85,3 +85,26 @@ npm run start:dev
 http://localhost:3000/
 npx prisma studio
 
+## Prerequisites
+
+Ensure the following are installed on your system:
+- **Node.js** (v16 or higher)
+- **Docker** (for Redis)
+- **npm** (Node Package Manager)
+
+---
+
+## Steps to Start the Project
+
+### 1. Install Dependencies
+```bash
+npm install
+
+### 2. Start Redis
+```bash
+docker start redis-laraigo
+
+-> if -> docker run -d -p 6379:6379 --name redis-laraigo redis:latest
+
+3. Start the Development Server
+npm run start:dev
